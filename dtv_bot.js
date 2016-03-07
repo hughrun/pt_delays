@@ -113,13 +113,11 @@ function checkTimetable() {
 		var randNoun = r.integer(1,totalNouns);
 		var rNoun = totalNouns - randNoun;
 		// select level of incident
-		var rLevel = r.integer(0,8)
 		var levelArray = ["Severe","Minor","Serious","Mild","Temporary","Major","Unfortunate","Regretable","Embarrassing","So-So","Usual","Typical","Unforseen","Average","Annual"]
-		var level = levelArray[rLevel];
+		var level = r.pick(levelArray);
 		// select type of incident
-		var rType = r.integer(0,10)
-		var typeArray = ["delays","incident","disruption","collision","short-shunting","cancellation","stoppage","derailment","re-routing","cock-up","bus replacement","runaround","incompetence","slowness","early-running",""]
-		var type = typeArray[rType];
+		var typeArray = ["delays","incident","disruption","collision","short-shunting","cancellation","stoppage","re-routing","cock-up","bus replacement","runaround","incompetence","slowness","early-running"]
+		var type = r.pick(typeArray);
 
 		// ****************************************
 		// ************** WEATHER *****************
