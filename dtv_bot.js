@@ -11,16 +11,49 @@ var Twit = require('twit')
   , access_token_secret:  "..."
 })
 
+	// ****************************************
+	// ************** UTILITIES ***************
+	// ****************************************
+
+// title case - capitalise the initial letter of the word when called
+function titleCase(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+};
+
+function sendTweet(tweetText) {
+	T.post('statuses/update', { status: tweetText }, function(err, data, response) {
+	  console.log("tweeted: " + data.text);
+	  if (err) {
+	  console.log(err);	
+	  } 
+	});
+};
+
+	// ***************************************
+	// **************** SETUP ****************
+	// ***************************************
+
 // run every ten minutes
 var timer = setInterval (function () {checkTimetable()}, 600000);
 
 function checkTimetable() {
 	// access JSON files
-	var stations = JSON.parse(fs.readFileSync('melbourne_train_stations.json'));
-	var lines = JSON.parse(fs.readFileSync('melb_train_lines.json'));
 	var trams = JSON.parse(fs.readFileSync('tram_routes.json'));
 	var adjNouns = JSON.parse(fs.readFileSync('adj_nouns.json'));
-	var trainSpills = JSON.parse(fs.readFileSync('train_spills.json'));
+	var qAndA = JSON.parse(fs.readFileSync('q_and_a.json'));
+	var stations = fs.readFileSync('train_stations.txt').toString().split(",");
+	
+	// ****************************************
+	// *************** TIMERS *****************
+	// ****************************************
+
+	// work out what day it is
+	// trickier than you think, because our server is in Toronto...
+	var toronto = new Date();
+	var torontoTime = toronto.getTime()
+	var Melbourne = new Date(torontoTime + 5.04e+7);
+	var today = Melbourne.getDay();
+	var week = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 	// we want to trigger the bot twice around 7:35 and 8:05 Melbourne time, then again around 17:15 and 17:50
 	// from April to September we are UTC + 10, from October to March we are UTC + 11
@@ -38,7 +71,7 @@ function checkTimetable() {
 		if ( timeNow.getUTCMonth() >= 9 || timeNow.getUTCMonth() < 3) {
 			return true
 		}
-	}
+	};
 
 	// summer time triggers
 	// morning
@@ -93,7 +126,7 @@ function checkTimetable() {
 			announcement();
 		}
 	}
-
+	
 	// ****************************************
 	// ************ RUN THE BOT!** ************
 	// ****************************************
@@ -104,20 +137,38 @@ function checkTimetable() {
 		// ********** SET UP VARIABLES ************
 		// ****************************************
 
+		// coin toss
+		var flip = r.bool();
 		// pick a random adjective
-		var totalAdj = adjNouns.adj.length;
-		var randAdj = r.integer(1,totalAdj);
-		var rAdj = totalAdj - randAdj;
+		var rAdj = r.pick(adjNouns.adj);
 		//pick a random noun
-		var totalNouns = adjNouns.noun.length;
-		var randNoun = r.integer(1,totalNouns);
-		var rNoun = totalNouns - randNoun;
-		// select level of incident
-		var levelArray = ["Severe","Minor","Serious","Mild","Temporary","Major","Unfortunate","Regretable","Embarrassing","So-So","Usual","Typical","Unforseen","Average","Annual"]
+		var rNoun = r.pick(adjNouns.noun);
+		//pick a random bad thing
+		var rBad = r.pick(adjNouns.bad_things);
+		//pick a random good thing
+		var rGood = r.pick(adjNouns.good_things);
+		// pick a random follow up comment
+		var followUp = r.pick(adjNouns.follow_up)
+		// pick a random level of incident
+		var levelArray = ["Severe","Minor","Serious","Mild","Temporary","Major","Unfortunate","Regretable","Embarrassing","So-So","Usual","Typical","Unforseen","Average","Annual","Weird	"]
 		var level = r.pick(levelArray);
 		// select type of incident
-		var typeArray = ["delays","incident","disruption","collision","short-shunting","cancellation","stoppage","re-routing","cock-up","bus replacement","runaround","incompetence","slowness","early-running"]
+		var typeArray = ["delays","incident","disruption","collision","short-shunting","cancellation","stoppage","re-routing","cock-up","bus replacement","runaround","incompetence","slowness","early-running","confusion"]
 		var type = r.pick(typeArray);
+		// pick a random signoff
+		var signOffArray = ["dT\> apologises for any inconvenience.","Have a nice day.","Expect delays.","Sucks to be you.","¯\\_(ツ)_/¯","Short-shunting likely.","All change.","Enjoy " + week[today] + "!","Hope you brought a packed lunch.","Everyone out!", "Please don't block the doors."];
+		var signOff = r.pick(signOffArray);
+		// pick a random station
+		var station = r.pick(stations);
+		// pick a random tram route
+		var route = r.pick(trams.routes);
+		// coin toss direction of tram
+		var tramRoute = route.route;
+		if (flip) {
+			var tramDestination = route.to;	
+		} else {
+			var tramDestination = route.from;
+		}
 
 		// ****************************************
 		// ************** WEATHER *****************
@@ -171,124 +222,56 @@ function checkTimetable() {
 	}
 
 		function weatherMessage(weather) {
+			if (r.bool()){
+				var tweetText = level +  " " + type + " due to " + rNoun + "-" + weather + " at " + station + " station" + ".";	
+			} else {
+				var tweetText = titleCase(rNoun) + "-" + weather + " caused " + type + " at " + station + ". " + signOff;
+			}
 
-			var lineNum = r.integer(0,18);
-			var line = lines.lines[lineNum];
-			var lineLength = stations[line].length;
-			var sNum = r.integer(1, lineLength);
-			var stop = lineLength - sNum;
-			var location = stations[line][stop];
-			var tweetText = level +  " " + type + " due to " + adjNouns.noun[rNoun] + "-" + weather + " at " + location + ".";
-			T.post('statuses/update', { status: tweetText }, function(err, data, response) {
-			  console.log("tweeted: " + data.text);
-			  if (err) {
-			  console.log(err);	
-			  } 
-			});
-		}
+			sendTweet(tweetText);
+		};
 
 		// ****************************************
 		// **************** TRAINS ****************
 		// ****************************************
 
 		function trainDelay() {
-			// chose a random number between 0 and 18 (there are 19 metro lines)
-			var lineNum = r.integer(0,18);
-			var line = lines.lines[lineNum];
-			// find how many stations there are on the line
-			var lineLength = stations[line].length;
-			// we can then find a random station by using 'length' minus any number between 1 and length, inclusive
-			// i.e. length will always be one more than the last index number, and zero is always the first station
-			var sNum = r.integer(1, lineLength);
-			var stop = lineLength - sNum;
-			// now choose a random station
-			var location = stations[line][stop];
-			// Use a function with 'some' to find out whether the station name is on the special list
-			function listedStation(stn){
-				return location == stn.name
-			}
-			var isListed = trainSpills.station.some(listedStation);
 
-			// if it's on the special stations list, iterate until you find it.
-			if (isListed) {
-				for (x in trainSpills.station) {
-					var spStation = trainSpills.station[x];
-					if (location == spStation.name) {
-						var totalSpills = spStation.options.length;
-						var spillNum = r.integer(1, totalSpills);
-						var spill = totalSpills - spillNum;
-						var tweetText = level + " " + type + " on " + line + " line due to " + adjNouns.adj[rAdj] + " " + spStation.options[spill] + " at " + location + ".";
-						T.post('statuses/update', { status: tweetText }, function(err, data, response) {
-						  console.log("tweeted: " + data.text);
-						  if (err) {
-						  console.log(err);	
-						  } 
-						});
-					}	
-				}	
-			} else /* if it's not on the list, use the generic list */{
-				tweetText = level +  " " + type + " on " + line + " line: " + adjNouns.noun[rNoun]+ " at " + location + ".";
-				T.post('statuses/update', { status: tweetText }, function(err, data, response) {
-						  console.log("tweeted: " + data.text);
-						  if (err) {
-						  console.log(err);	
-						  } 
-						});	
-			}		
-		}
-
-		// ****************************************
-		// **************** TRAMS *****************
-		// ****************************************
-
-		// pick one of the 25 tram routes
-		var tramNum = r.integer(0,24);
-		var tramRoute = trams.routes[tramNum].route;
-		// randomly decide which direction it's heading
-		var tramDirection = r.bool();
-		if (tramDirection) {
-			var tramDestination = trams.routes[tramNum].to	
-		} else {
-			var tramDestination = trams.routes[tramNum].from;
-		}
-
-		// pick a random incident
-		var totalTramOptions = trams.routes[tramNum].incidents.length;
-		var tramOpts = r.integer(1, totalTramOptions);
-		var trInc = totalTramOptions - tramOpts;
-		var tramIncident = trams.routes[tramNum].incidents[trInc];
-
-		// send a differently worded message depending on which function is called.
-
-		function tramDelayOne() {
-			var tweetText = tramRoute + " to " + tramDestination + ": " + type + " due to " + tramIncident + ".";
-			T.post('statuses/update', { status: tweetText }, function(err, data, response) {
-			  console.log("tweeted: " + data.text);
-			  if (err) {
-			  console.log(err);	
-			  } 
-			});			
+			question = r.pick(qAndA.questions);
+			answer = r.pick(question.a);
+			
+			if (flip) {
+				var tweetText = question.q + " " + answer;		
+			} else {
+				var tweetText = level + " " + rBad + " at " + station + ". " + signOff;
+			}	
+			sendTweet(tweetText);
 		};
+
+		// ****************************************
+		// ************ CRUSHED DREAMS ************
+		// ****************************************
+
+		function crushedDreams() {
+			if (flip) {
+				sendTweet(rGood + " delayed. " + followUp);
+			} else {
+				sendTweet(rGood + " delayed. Happy " + week[today] + "!");
+			}
+		};
+
+		// ****************************************
+		// ***************** TRAMS ****************
+		// ****************************************
 
 		function tramDelayTwo() {
 			// make a variable with 50% chance of being true
-			var flip = r.bool();
 			if (flip) {
-				var tweetText = level + ' ' + type + ' on ' + tramRoute + ' due to ' + adjNouns.adj[rAdj] + ' ' + adjNouns.noun[rNoun] + '.';
-				T.post('statuses/update', { status: tweetText }, function(err, data, response) {
-				  console.log("tweeted: " + data.text);
-				  if (err) {
-				  console.log(err);	
-				  } 
-				});			
+				var tweetText = level + ' ' + type + ' on ' + tramRoute + ' due to ' + rAdj + ' ' + rNoun + '.';
+				sendTweet(tweetText);		
 			} else {
-				var tweetText = "dT> apologises for any inconvenience on " + tramRoute + ": " + level + " " + adjNouns.noun[rNoun] + " " + type + ".";
-				T.post('statuses/update', { status: tweetText }, function(err, data, response) {
-				  console.log("tweeted: " + data.text);
-				  if (err) {
-				  console.log(err);	
-				  } 
-				});
+				var tweetText = tramRoute + ": " + level + " " + rBad + " " + tramDestination + "-bound. " + signOff;
+				sendTweet(tweetText);
 			}
 		};
 
@@ -305,12 +288,11 @@ function checkTimetable() {
 			trainDelay();		
 		}
 		if (tweet == 3) {
-			tramDelayOne();		
+			crushedDreams();		
 		}
 		if (tweet == 4) {
 			tramDelayTwo();		
 		}
 	}
-	console.log("looped on " + timeNow.toDateString());
 }
 
